@@ -82,8 +82,18 @@ function handleWriteError(err, res) {
 // routes
 router.get('/', async (req, res) => {
   const { organizationId } = req.user
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : ''
+  const where = { organizationId }
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { sku: { contains: search, mode: 'insensitive' } },
+    ]
+  }
+
   const [products, defaultThreshold] = await Promise.all([
-    prisma.product.findMany({ where: { organizationId }, orderBy: { createdAt: 'desc' } }),
+    prisma.product.findMany({ where, orderBy: { createdAt: 'desc' } }),
     getDefaultThreshold(organizationId),
   ])
 
@@ -132,6 +142,38 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     handleWriteError(err, res)
   }
+})
+
+router.post('/:id/adjust', async (req, res) => {
+  const { change, note } = req.body ?? {}
+  const { organizationId } = req.user
+  const where = { id: req.params.id, organizationId }
+
+  if (!Number.isInteger(change) || change === 0 || Math.abs(change) > maxInt) {
+    return res.status(400).json({ error: 'Change must be a whole number other than 0' })
+  }
+  if (!isEmpty(note) && (typeof note !== 'string' || note.length > 200)) {
+    return res.status(400).json({ error: 'Note must be text of up to 200 characters' })
+  }
+
+  const { count } = await prisma.product.updateMany({
+    where: { ...where, quantity: { gte: Math.max(-change, 0), lte: maxInt - Math.max(change, 0) } },
+    data: {
+      quantity: { increment: change },
+      lastAdjustmentNote: note?.trim() || null,
+      lastUpdatedBy: req.user.id,
+    },
+  })
+
+  const product = await prisma.product.findFirst({ where })
+
+  if (!product) return res.status(404).json({ error: 'Product not found' })
+  if (count === 0) {
+    return res.status(400).json({ error: change < 0 ? 'Stock cannot go below 0' : 'Quantity is too large' })
+  }
+
+  const defaultThreshold = await getDefaultThreshold(organizationId)
+  res.json({ product: { ...product, isLowStock: isLowStock(product, defaultThreshold) } })
 })
 
 router.delete('/:id', async (req, res) => {

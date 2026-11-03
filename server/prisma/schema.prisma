@@ -40,6 +40,7 @@ model Product {
   sellingPrice      Decimal?     @db.Decimal(10, 2)
   lowStockThreshold Int?
   lastUpdatedBy     String?
+  lastAdjustmentNote String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
