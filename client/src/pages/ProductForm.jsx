@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import Field from '../components/Field.jsx'
+import { formatPrice } from '../format.js'
 
 const emptyForm = {
   name: '',
@@ -14,9 +15,15 @@ const emptyForm = {
 }
 
 function toFormValues(product) {
-  return Object.fromEntries(
+  const values = Object.fromEntries(
     Object.keys(emptyForm).map((key) => [key, product[key] === null ? '' : String(product[key])]),
   )
+
+  for (const key of ['costPrice', 'sellingPrice']) {
+    if (values[key]) values[key] = formatPrice(values[key])
+  }
+
+  return values
 }
 
 export default function ProductForm() {
@@ -26,13 +33,14 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(Boolean(id))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     if (!id) return
 
     api(`/products/${id}`)
       .then((data) => setForm(toFormValues(data.product)))
-      .catch((err) => setError(err.message))
+      .catch((err) => setLoadError(err.message))
       .finally(() => setLoading(false))
   }, [id])
 
@@ -57,6 +65,19 @@ export default function ProductForm() {
   }
 
   if (loading) return <p className="text-slate-500">Loading product...</p>
+
+  if (loadError) {
+    return (
+      <div>
+        <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2 mb-4">
+          {loadError}
+        </p>
+        <Link to="/products" className="text-sm text-indigo-600 hover:underline">
+          Back to Products
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-xl">

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../AuthContext.jsx'
 
@@ -9,36 +10,46 @@ const links = [
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const [error, setError] = useState('')
+
+  async function handleLogout() {
+    setError('')
+    try {
+      await logout()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <span className="font-semibold text-slate-900">StockFlow</span>
-            <nav className="flex gap-4">
-              {links.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  end={link.to === '/'}
-                  className={({ isActive }) =>
-                    isActive
-                      ? 'text-sm font-medium text-indigo-600'
-                      : 'text-sm text-slate-600 hover:text-slate-900'
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <span className="font-semibold text-slate-900">StockFlow</span>
+          <nav className="order-last sm:order-none w-full sm:w-auto sm:grow flex gap-4">
+            {links.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.to === '/'}
+                className={({ isActive }) =>
+                  isActive
+                    ? 'text-sm font-medium text-indigo-600'
+                    : 'text-sm text-slate-600 hover:text-slate-900'
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-500 truncate">{user.organizationName}</span>
+            <span className="hidden sm:inline text-sm text-slate-500 truncate max-w-48">
+              {user.organizationName}
+            </span>
             <button
               type="button"
-              onClick={logout}
-              className="text-sm text-slate-600 hover:text-slate-900 cursor-pointer"
+              onClick={handleLogout}
+              className="text-sm text-slate-600 hover:text-slate-900 whitespace-nowrap cursor-pointer"
             >
               Log out
             </button>
@@ -46,6 +57,11 @@ export default function Layout() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {error && (
+          <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2 mb-4">
+            {error}
+          </p>
+        )}
         <Outlet />
       </main>
     </div>

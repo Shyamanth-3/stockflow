@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import AdjustStock from '../components/AdjustStock.jsx'
+import { formatPrice } from '../format.js'
 
 export default function Products() {
   const [products, setProducts] = useState([])
@@ -118,7 +119,9 @@ export default function Products() {
                         {product.isLowStock ? 'Low stock' : 'In stock'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-slate-900">{product.sellingPrice ?? '-'}</td>
+                    <td className="px-4 py-3 text-right text-slate-900">
+                      {product.sellingPrice === null ? '-' : formatPrice(product.sellingPrice)}
+                    </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button
                         type="button"
