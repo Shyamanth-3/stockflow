@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext.jsx'
 const links = [
   { to: '/', label: 'Dashboard' },
   { to: '/products', label: 'Products' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export default function Layout() {

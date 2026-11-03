@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
 import productRoutes from './routes/products.js'
 import dashboardRoutes from './routes/dashboard.js'
+import settingsRoutes from './routes/settings.js'
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET is not set')
@@ -24,6 +25,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/settings', settingsRoutes)
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' })

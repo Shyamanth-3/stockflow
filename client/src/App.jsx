@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
 import ProductForm from './pages/ProductForm.jsx'
 import Products from './pages/Products.jsx'
+import Settings from './pages/Settings.jsx'
 import Signup from './pages/Signup.jsx'
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/products/new" element={<ProductForm />} />
               <Route path="/products/:id/edit" element={<ProductForm />} />
+              <Route path="/settings" element={<Settings />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
