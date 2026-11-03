@@ -4,6 +4,8 @@ import Layout from './components/Layout.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
+import ProductForm from './pages/ProductForm.jsx'
+import Products from './pages/Products.jsx'
 import Signup from './pages/Signup.jsx'
 
 export default function App() {
@@ -18,6 +20,9 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/products/new" element={<ProductForm />} />
+              <Route path="/products/:id/edit" element={<ProductForm />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

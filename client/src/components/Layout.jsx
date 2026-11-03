@@ -1,7 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../AuthContext.jsx'
 
-const links = [{ to: '/', label: 'Dashboard' }]
+const links = [
+  { to: '/', label: 'Dashboard' },
+  { to: '/products', label: 'Products' },
+]
 
 export default function Layout() {
   const { user, logout } = useAuth()
