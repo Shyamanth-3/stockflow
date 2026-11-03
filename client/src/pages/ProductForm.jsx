@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
-import Field from '../components/Field.jsx'
+import ErrorMessage from '../components/ErrorMessage.jsx'
+import Field, { inputClass } from '../components/Field.jsx'
 import { formatPrice } from '../format.js'
 
 const emptyForm = {
@@ -30,6 +31,7 @@ export default function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [form, setForm] = useState(emptyForm)
+  const [loaded, setLoaded] = useState(null)
   const [loading, setLoading] = useState(Boolean(id))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -39,7 +41,10 @@ export default function ProductForm() {
     if (!id) return
 
     api(`/products/${id}`)
-      .then((data) => setForm(toFormValues(data.product)))
+      .then((data) => {
+        setForm(toFormValues(data.product))
+        setLoaded(data.product)
+      })
       .catch((err) => setLoadError(err.message))
       .finally(() => setLoading(false))
   }, [id])
@@ -55,7 +60,7 @@ export default function ProductForm() {
     try {
       await api(id ? `/products/${id}` : '/products', {
         method: id ? 'PUT' : 'POST',
-        body: form,
+        body: { ...form, updatedAt: loaded?.updatedAt },
       })
       navigate('/products')
     } catch (err) {
@@ -69,9 +74,7 @@ export default function ProductForm() {
   if (loadError) {
     return (
       <div>
-        <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2 mb-4">
-          {loadError}
-        </p>
+        <ErrorMessage className="mb-4">{loadError}</ErrorMessage>
         <Link to="/products" className="text-sm text-indigo-600 hover:underline">
           Back to Products
         </Link>
@@ -85,13 +88,9 @@ export default function ProductForm() {
         {id ? 'Edit Product' : 'Add Product'}
       </h1>
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
-        {error && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2">
-            {error}
-          </p>
-        )}
-        <Field label="Name" id="name" required value={form.name} onChange={handleChange} />
-        <Field label="SKU" id="sku" required value={form.sku} onChange={handleChange} />
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+        <Field label="Name" id="name" required maxLength={200} value={form.name} onChange={handleChange} />
+        <Field label="SKU" id="sku" required maxLength={100} value={form.sku} onChange={handleChange} />
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-slate-700 mb-1">
             Description (optional)
@@ -100,9 +99,10 @@ export default function ProductForm() {
             id="description"
             name="description"
             rows={3}
+            maxLength={2000}
             value={form.description}
             onChange={handleChange}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className={inputClass}
           />
         </div>
         <Field label="Quantity on Hand" id="quantity" type="number" min="0" step="1" required value={form.quantity} onChange={handleChange} />
@@ -114,6 +114,17 @@ export default function ProductForm() {
           <Field label="Low Stock Threshold (optional)" id="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={handleChange} />
           <p className="text-xs text-slate-500 mt-1">Leave empty to use your default threshold.</p>
         </div>
+        {loaded?.lastAdjustmentNote && (
+          <p className="text-sm text-slate-600 break-words">
+            Latest stock note: {loaded.lastAdjustmentNote}
+          </p>
+        )}
+        {loaded && (
+          <p className="text-xs text-slate-500">
+            Last updated {new Date(loaded.updatedAt).toLocaleString()}
+            {loaded.updatedByUser ? ` by ${loaded.updatedByUser.email}` : ''}
+          </p>
+        )}
         <div className="flex items-center gap-4 pt-2">
           <button
             type="submit"

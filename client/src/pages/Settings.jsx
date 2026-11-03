@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import ErrorMessage from '../components/ErrorMessage.jsx'
 import Field from '../components/Field.jsx'
 
 export default function Settings() {
   const [threshold, setThreshold] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -12,7 +14,7 @@ export default function Settings() {
   useEffect(() => {
     api('/settings')
       .then((data) => setThreshold(String(data.defaultLowStockThreshold)))
-      .catch((err) => setError(err.message))
+      .catch((err) => setLoadError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
@@ -24,7 +26,7 @@ export default function Settings() {
     try {
       const data = await api('/settings', {
         method: 'PUT',
-        body: { defaultLowStockThreshold: Number(threshold) },
+        body: { defaultLowStockThreshold: threshold },
       })
       setThreshold(String(data.defaultLowStockThreshold))
       setSaved(true)
@@ -41,13 +43,11 @@ export default function Settings() {
 
       {loading && <p className="text-slate-500">Loading settings...</p>}
 
-      {!loading && (
+      {loadError && <ErrorMessage>{loadError}</ErrorMessage>}
+
+      {!loading && !loadError && (
         <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
-          {error && (
-            <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2">
-              {error}
-            </p>
-          )}
+          {error && <ErrorMessage>{error}</ErrorMessage>}
           {saved && (
             <p role="status" className="text-sm text-emerald-800 bg-emerald-50 rounded-md px-3 py-2">
               Settings saved

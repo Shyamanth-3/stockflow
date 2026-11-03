@@ -2,37 +2,47 @@ import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import AdjustStock from '../components/AdjustStock.jsx'
+import ErrorMessage from '../components/ErrorMessage.jsx'
 import { formatPrice } from '../format.js'
 
 export default function Products() {
-  const [products, setProducts] = useState([])
   const [search, setSearch] = useState('')
+  const [query, setQuery] = useState({ search: '', page: 1 })
+  const [reloadCount, setReloadCount] = useState(0)
+  const [results, setResults] = useState(null)
   const [adjustingId, setAdjustingId] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const products = results?.products ?? []
+  const isCurrentSearch = results?.search === search
+  const pageCount = results ? Math.ceil(results.total / results.pageSize) : 0
+
+  useEffect(() => {
+    if (search === query.search) return
+
+    const timer = setTimeout(() => setQuery({ search, page: 1 }), search ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [search, query.search])
 
   useEffect(() => {
     let isCurrent = true
-    const timer = setTimeout(() => {
-      api(`/products?search=${encodeURIComponent(search)}`)
-        .then((data) => {
-          if (!isCurrent) return
-          setProducts(data.products)
-          setError('')
-        })
-        .catch((err) => {
-          if (isCurrent) setError(err.message)
-        })
-        .finally(() => {
-          if (isCurrent) setLoading(false)
-        })
-    }, 300)
+
+    api(`/products?search=${encodeURIComponent(query.search)}&page=${query.page}`)
+      .then((data) => {
+        if (!isCurrent) return
+        setResults({ ...data, search: query.search })
+        setError('')
+      })
+      .catch((err) => {
+        if (!isCurrent) return
+        setResults(null)
+        setError(err.message)
+      })
 
     return () => {
       isCurrent = false
-      clearTimeout(timer)
     }
-  }, [search])
+  }, [query, reloadCount])
 
   async function handleDelete(product) {
     if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return
@@ -40,14 +50,21 @@ export default function Products() {
     setError('')
     try {
       await api(`/products/${product.id}`, { method: 'DELETE' })
-      setProducts((current) => current.filter((item) => item.id !== product.id))
+      if (products.length === 1 && query.page > 1) {
+        setQuery({ ...query, page: query.page - 1 })
+      } else {
+        setReloadCount((count) => count + 1)
+      }
     } catch (err) {
       setError(err.message)
     }
   }
 
   function handleAdjusted(updated) {
-    setProducts((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    setResults((current) => ({
+      ...current,
+      products: current.products.map((item) => (item.id === updated.id ? updated : item)),
+    }))
     setAdjustingId(null)
   }
 
@@ -67,23 +84,24 @@ export default function Products() {
         type="search"
         aria-label="Search products by name or SKU"
         placeholder="Search by name or SKU"
+        maxLength={200}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-full sm:max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
 
-      {error && (
-        <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2 mb-4">
-          {error}
-        </p>
-      )}
+      {error && <ErrorMessage className="mb-4">{error}</ErrorMessage>}
 
-      {loading && <p className="text-slate-500">Loading products...</p>}
+      {!results && !error && <p className="text-slate-500">Loading products...</p>}
 
-      {!loading && !error && products.length === 0 && (
+      {results && !isCurrentSearch && <p className="text-sm text-slate-500 mb-4">Searching...</p>}
+
+      {results && isCurrentSearch && products.length === 0 && (
         <div className="bg-white border border-slate-200 rounded-lg p-8 text-center">
-          <p className="text-slate-600">
-            {search ? `No products match "${search}".` : 'No products yet. Add your first product to get started.'}
+          <p className="text-slate-600 break-words">
+            {results.search
+              ? `No products match "${results.search}".`
+              : 'No products yet. Add your first product to get started.'}
           </p>
         </div>
       )}
@@ -105,15 +123,22 @@ export default function Products() {
               {products.map((product) => (
                 <Fragment key={product.id}>
                   <tr>
-                    <td className="px-4 py-3 text-slate-900">{product.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{product.sku}</td>
+                    <td className="px-4 py-3 text-slate-900 max-w-xs break-words">
+                      {product.name}
+                      {product.lastAdjustmentNote && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Latest note: {product.lastAdjustmentNote}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 max-w-40 break-words">{product.sku}</td>
                     <td className="px-4 py-3 text-right text-slate-900">{product.quantity}</td>
                     <td className="px-4 py-3">
                       <span
                         className={
                           product.isLowStock
-                            ? 'rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800'
-                            : 'rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800'
+                            ? 'rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 whitespace-nowrap'
+                            : 'rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800 whitespace-nowrap'
                         }
                       >
                         {product.isLowStock ? 'Low stock' : 'In stock'}
@@ -157,6 +182,30 @@ export default function Products() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between gap-4 mt-4 text-sm text-slate-600">
+          <button
+            type="button"
+            disabled={results.page <= 1}
+            onClick={() => setQuery({ ...query, page: results.page - 1 })}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span>
+            Page {results.page} of {pageCount} ({results.total} products)
+          </span>
+          <button
+            type="button"
+            disabled={results.page >= pageCount}
+            onClick={() => setQuery({ ...query, page: results.page + 1 })}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
         </div>
       )}
     </div>

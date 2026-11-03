@@ -57,8 +57,8 @@ export default function Signup() {
         </>
       }
     >
-      <Field label="Organization name" id="organizationName" required placeholder="My Test Store" value={form.organizationName} onChange={handleChange} />
-      <Field label="Email" id="email" type="email" autoComplete="email" required value={form.email} onChange={handleChange} />
+      <Field label="Organization name" id="organizationName" required maxLength={100} placeholder="My Test Store" value={form.organizationName} onChange={handleChange} />
+      <Field label="Email" id="email" type="email" autoComplete="email" required maxLength={254} value={form.email} onChange={handleChange} />
       <div>
         <Field label="Password" id="password" type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={form.password} onChange={handleChange} />
         <p className="text-xs text-slate-500 mt-1">At least 8 characters, with a letter and a number.</p>

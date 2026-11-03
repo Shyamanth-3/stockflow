@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
+import ErrorMessage from '../components/ErrorMessage.jsx'
 
 function SummaryCard({ label, value }) {
   return (
@@ -25,11 +26,7 @@ export default function Dashboard() {
     <div>
       <h1 className="text-2xl font-semibold text-slate-900 mb-6">Dashboard</h1>
 
-      {error && (
-        <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2">
-          {error}
-        </p>
-      )}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
 
       {!summary && !error && <p className="text-slate-500">Loading dashboard...</p>}
 
@@ -84,6 +81,12 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {summary.lowStockCount > summary.lowStockItems.length && (
+            <p className="text-sm text-slate-500 mt-3">
+              Showing the {summary.lowStockItems.length} lowest of {summary.lowStockCount} low stock items.
+            </p>
           )}
         </>
       )}

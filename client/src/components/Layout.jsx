@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../AuthContext.jsx'
+import ErrorMessage from './ErrorMessage.jsx'
 
 const links = [
   { to: '/', label: 'Dashboard' },
@@ -57,11 +58,7 @@ export default function Layout() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-8">
-        {error && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2 mb-4">
-            {error}
-          </p>
-        )}
+        {error && <ErrorMessage className="mb-4">{error}</ErrorMessage>}
         <Outlet />
       </main>
     </div>

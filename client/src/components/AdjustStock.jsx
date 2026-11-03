@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api.js'
+import ErrorMessage from './ErrorMessage.jsx'
 
 export default function AdjustStock({ product, onAdjusted, onCancel }) {
   const [change, setChange] = useState('')
@@ -64,11 +65,7 @@ export default function AdjustStock({ product, onAdjusted, onCancel }) {
       <button type="button" onClick={onCancel} className="text-sm text-slate-600 hover:text-slate-900 cursor-pointer py-1.5">
         Cancel
       </button>
-      {error && (
-        <p role="alert" className="w-full text-sm text-red-700">
-          {error}
-        </p>
-      )}
+      {error && <ErrorMessage className="w-full">{error}</ErrorMessage>}
     </form>
   )
 }

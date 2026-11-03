@@ -1,3 +1,12 @@
+let unauthorizedHandler = null
+
+export function onUnauthorized(handler) {
+  unauthorizedHandler = handler
+  return () => {
+    unauthorizedHandler = null
+  }
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   let res
   try {
@@ -13,6 +22,8 @@ export async function api(path, { method = 'GET', body } = {}) {
   const data = await res.json().catch(() => ({}))
 
   if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.()
+
     const error = new Error(data.error || 'Something went wrong')
     error.status = res.status
     throw error

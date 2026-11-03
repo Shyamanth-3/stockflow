@@ -1,3 +1,5 @@
+import ErrorMessage from './ErrorMessage.jsx'
+
 export default function AuthCard({ title, error, submitLabel, submitting, onSubmit, children, footer }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
@@ -5,11 +7,7 @@ export default function AuthCard({ title, error, submitLabel, submitting, onSubm
         <p className="text-center font-semibold text-slate-900 mb-6">StockFlow</p>
         <form onSubmit={onSubmit} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
           <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-          {error && (
-            <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-md px-3 py-2">
-              {error}
-            </p>
-          )}
+          {error && <ErrorMessage>{error}</ErrorMessage>}
           {children}
           <button
             type="submit"
