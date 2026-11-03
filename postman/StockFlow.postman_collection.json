@@ -1582,6 +1582,75 @@
           }
         },
         {
+          "name": "Update without updated time",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error message is correct', () => pm.expect(pm.response.json().error).to.eql('updatedAt is required and must be a valid date'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Red Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 20,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Reload before update",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('openedAt', pm.response.json().product.updatedAt);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "Update product",
           "event": [
             {
@@ -1616,7 +1685,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Red Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 20,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5\n}"
+              "raw": "{\n  \"name\": \"Red Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 20,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5,\n  \"updatedAt\": \"{{openedAt}}\"\n}"
             }
           }
         },
@@ -1654,7 +1723,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Blue Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": \"many\",\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5\n}"
+              "raw": "{\n  \"name\": \"Blue Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": \"many\",\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5,\n  \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n}"
             }
           }
         },
@@ -1693,7 +1762,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Blue Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 3,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5\n}"
+              "raw": "{\n  \"name\": \"Blue Pen\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 3,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5,\n  \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n}"
             }
           }
         },
@@ -2526,7 +2595,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Hacked\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 3,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5\n}"
+              "raw": "{\n  \"name\": \"Hacked\",\n  \"sku\": \"{{sku}}\",\n  \"description\": \"Test pen\",\n  \"quantity\": 3,\n  \"costPrice\": \"5.50\",\n  \"sellingPrice\": \"19.99\",\n  \"lowStockThreshold\": 5,\n  \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n}"
             }
           }
         },

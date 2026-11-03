@@ -58,6 +58,11 @@ function createClient(startingCookie = '', baseUrl = server.baseUrl) {
   return request
 }
 
+async function editProduct(request, path, body) {
+  const { updatedAt } = (await request('GET', path)).body.product
+  return request('PUT', path, { ...body, updatedAt })
+}
+
 async function signUp(name) {
   const request = createClient()
   const res = await request('POST', '/auth/signup', {
@@ -75,12 +80,16 @@ before(async () => {
 })
 
 after(async () => {
-  server.child.removeAllListeners('exit')
-  server.child.kill()
-  await prisma.organization.deleteMany({
-    where: { nameKey: { startsWith: emailPrefix } },
-  })
-  await prisma.$disconnect()
+  server?.child.removeAllListeners('exit')
+  server?.child.kill()
+
+  try {
+    await prisma.organization.deleteMany({
+      where: { nameKey: { startsWith: emailPrefix } },
+    })
+  } finally {
+    await prisma.$disconnect()
+  }
 })
 
 // signup rules
@@ -123,6 +132,7 @@ describe('signup rules', () => {
       `${emailPrefix} DUPE store`,
       `  ${emailPrefix}   Dupe   Store  `,
       `${emailPrefix} Dupe​ Store`,
+      `${emailPrefix} Dupe ​ Store`,
     ]) {
       const res = await createClient()('POST', '/auth/signup', details('dupe2', { organizationName }))
       assert.equal(res.status, 409)
@@ -208,8 +218,8 @@ describe('rate limits in production mode', () => {
   })
 
   after(() => {
-    production.child.removeAllListeners('exit')
-    production.child.kill()
+    production?.child.removeAllListeners('exit')
+    production?.child.kill()
   })
 
   it('blocks repeated failed logins for one account but not others', async () => {
@@ -224,6 +234,13 @@ describe('rate limits in production mode', () => {
     assert.equal(blocked.status, 429)
     assert.equal(blocked.body.error, 'Too many attempts. Please try again later.')
     assert.equal((await attempt('another@example.com')).status, 401)
+  })
+
+  it('rejects a malformed login email cleanly', async () => {
+    const request = createClient('', production.baseUrl)
+    const email = { toString: null, valueOf: null }
+    const res = await request('POST', '/auth/login', { email, password: 'wrongpass123' })
+    assert.equal(res.status, 400)
   })
 
   it('blocks too many signups', async () => {
@@ -257,6 +274,16 @@ describe('server responses', () => {
     const res = await postRaw(JSON.stringify({ email: 'x'.repeat(200000) }))
     assert.equal(res.status, 413)
     assert.deepEqual(await res.json(), { error: 'Request is too large' })
+  })
+
+  it('refuses compressed request bodies', async () => {
+    const res = await fetch(`${server.baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'br' },
+      body: 'not really compressed',
+    })
+    assert.equal(res.status, 415)
+    assert.deepEqual(await res.json(), { error: 'The request could not be processed' })
   })
 
   it('sends security headers and hides the framework', async () => {
@@ -329,7 +356,11 @@ describe('tenant isolation', () => {
   })
 
   it('blocks updating another organization product', async () => {
-    const res = await orgB('PUT', `/products/${productId}`, { ...product, name: 'Hacked' })
+    const res = await orgB('PUT', `/products/${productId}`, {
+      ...product,
+      name: 'Hacked',
+      updatedAt: new Date().toISOString(),
+    })
     assert.equal(res.status, 404)
   })
 
@@ -440,14 +471,24 @@ describe('product edits', () => {
     assert.equal(res.body.product.name, 'Renamed')
   })
 
-  it('rejects an invalid updated time', async () => {
-    const res = await request('PUT', `/products/${saved.id}`, { ...product, updatedAt: 'not-a-date' })
-    assert.equal(res.status, 400)
-  })
+  const invalidTimes = {
+    'missing': undefined,
+    'not a date': 'not-a-date',
+    'a number': 1000,
+    'an object that cannot be converted': { toString: null, valueOf: null },
+  }
+
+  for (const [label, updatedAt] of Object.entries(invalidTimes)) {
+    it(`rejects an edit with an updated time that is ${label}`, async () => {
+      const res = await request('PUT', `/products/${saved.id}`, { ...product, name: 'Rejected', updatedAt })
+      assert.equal(res.status, 400)
+      assert.match(res.body.error, /updatedAt/)
+    })
+  }
 
   it('returns a duplicate SKU error from an edit', async () => {
     await request('POST', '/products', { ...product, sku: 'TAKEN' })
-    const res = await request('PUT', `/products/${saved.id}`, { ...product, sku: 'TAKEN' })
+    const res = await editProduct(request, `/products/${saved.id}`, { ...product, sku: 'TAKEN' })
     assert.equal(res.status, 409)
     assert.match(res.body.error, /SKU/)
   })
@@ -464,10 +505,10 @@ describe('product edits', () => {
     const kept = await request('POST', `${path}/adjust`, { change: 1 })
     assert.equal(kept.body.product.lastAdjustmentNote, 'Damaged')
 
-    const sameQuantity = await request('PUT', path, { ...product, quantity: kept.body.product.quantity, name: 'Again' })
+    const sameQuantity = await editProduct(request, path, { ...product, quantity: kept.body.product.quantity, name: 'Again' })
     assert.equal(sameQuantity.body.product.lastAdjustmentNote, 'Damaged')
 
-    const newQuantity = await request('PUT', path, { ...product, quantity: 50 })
+    const newQuantity = await editProduct(request, path, { ...product, quantity: 50 })
     assert.equal(newQuantity.body.product.lastAdjustmentNote, null)
   })
 })

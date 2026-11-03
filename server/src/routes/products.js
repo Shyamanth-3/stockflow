@@ -170,16 +170,17 @@ router.put('/:id', async (req, res) => {
   const { data, error } = parseProduct(req.body)
   if (error) return res.status(400).json({ error })
 
-  const expectedUpdatedAt = isEmpty(req.body.updatedAt) ? null : new Date(req.body.updatedAt)
-  if (expectedUpdatedAt && Number.isNaN(expectedUpdatedAt.getTime())) {
-    return res.status(400).json({ error: 'Updated time is not valid' })
+  const { updatedAt } = req.body
+  const expectedUpdatedAt = typeof updatedAt === 'string' ? new Date(updatedAt) : null
+  if (!expectedUpdatedAt || Number.isNaN(expectedUpdatedAt.getTime())) {
+    return res.status(400).json({ error: 'updatedAt is required and must be a valid date' })
   }
 
   const products = productsFor(req.user.organizationId)
   const current = await products.findFirst({ where: { id: req.params.id } })
 
   if (!current) return sendNotFound(res)
-  if (expectedUpdatedAt && expectedUpdatedAt.getTime() !== current.updatedAt.getTime()) {
+  if (expectedUpdatedAt.getTime() !== current.updatedAt.getTime()) {
     return sendConflict(res)
   }
 
@@ -214,6 +215,7 @@ router.post('/:id/adjust', async (req, res) => {
     return res.status(400).json({ error: `Note must be text of up to ${textLimits.note} characters` })
   }
 
+  const defaultThreshold = await getDefaultThreshold(organizationId)
   const cleanNote = note?.trim()
   const [product] = await products.updateManyAndReturn({
     where: {
@@ -233,7 +235,6 @@ router.post('/:id/adjust', async (req, res) => {
     return res.status(400).json({ error: change < 0 ? 'Stock cannot go below 0' : 'Quantity is too large' })
   }
 
-  const defaultThreshold = await getDefaultThreshold(organizationId)
   res.json({ product: { ...product, isLowStock: isLowStock(product, defaultThreshold) } })
 })
 

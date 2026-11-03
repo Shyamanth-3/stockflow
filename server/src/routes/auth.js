@@ -37,7 +37,7 @@ function cleanOrganizationName(value) {
 }
 
 function toNameKey(name) {
-  return name.replace(/\p{Cf}/gu, '').trim().toLowerCase()
+  return name.replace(/\p{Cf}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 function setAuthCookie(res, user) {

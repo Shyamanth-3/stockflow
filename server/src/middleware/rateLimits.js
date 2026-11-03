@@ -24,8 +24,8 @@ export const loginAccountLimiter = createLimiter({
   limit: 10,
   skipSuccessfulRequests: true,
   keyGenerator: (req) => {
-    const email = String(req.body?.email).trim().toLowerCase().slice(0, 254)
-    return `${ipKeyGenerator(req.ip)}:${email}`
+    const email = typeof req.body?.email === 'string' ? req.body.email : ''
+    return `${ipKeyGenerator(req.ip)}:${email.trim().toLowerCase().slice(0, 254)}`
   },
 })
 

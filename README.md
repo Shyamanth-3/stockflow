@@ -27,7 +27,7 @@ The live app runs on Render's free tier, which sleeps when idle. The first visit
 
 ## Run it locally
 
-You need Node.js 22.9 or newer and a PostgreSQL database. A separate Neon branch works well, so local work never touches production.
+You need Node.js 22.23.4 or a newer 22.x release, which includes a security fix for its Brotli decoder, and a PostgreSQL database. A separate Neon branch works well, so local work never touches production.
 
 1. Install the dependencies:
 
@@ -91,7 +91,8 @@ Create a web service from this repo with these settings:
 
 - **Tenant isolation:** product queries go through `productsFor(organizationId)` in `server/src/tenant.js`, which adds the organization filter to every query. The organization always comes from the logged-in user, never from the request.
 - **Sessions:** `requireAuth` checks the database on each request, so deleted accounts lose access immediately. Logging out increases the user's `tokenVersion`, which also ends their sessions on other devices.
-- **Stock changes:** stock adjustments use one atomic database update, so simultaneous changes cannot take stock below 0. The edit form sends the `updatedAt` value it loaded, and the API rejects the save if the product has changed since.
+- **Stock changes:** stock adjustments use one atomic database update, so simultaneous changes cannot take stock below 0. Product edits must send the `updatedAt` value they loaded, and the API rejects the save if the product has changed since. If an adjustment's outcome is unknown, for example after a lost connection, the form asks the user to check the quantity before trying again.
+- **Request bodies:** the API accepts uncompressed JSON only, because browsers do not compress request bodies.
 - **Low-stock rule:** a product is low when its quantity is at or below its own threshold, or the organization's default if it has none. A threshold of 0 is treated as a real value.
 
 ### Additions beyond the PRD
