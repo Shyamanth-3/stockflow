@@ -1,19 +1,28 @@
-import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './AuthContext.jsx'
+import Layout from './components/Layout.jsx'
+import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import Login from './pages/Login.jsx'
+import Signup from './pages/Signup.jsx'
 
 export default function App() {
-  const [status, setStatus] = useState('checking')
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus('unreachable'))
-  }, [])
-
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-2 bg-slate-50">
-      <h1 className="text-3xl font-semibold text-slate-900">StockFlow</h1>
-      <p className="text-slate-600">API status: {status}</p>
-    </main>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+          </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Dashboard />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
