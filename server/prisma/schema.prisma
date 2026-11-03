@@ -23,8 +23,10 @@ model User {
   id             String       @id @default(cuid())
   email          String       @unique
   passwordHash   String
+  tokenVersion   Int          @default(0)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedProducts Product[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -41,6 +43,7 @@ model Product {
   sellingPrice      Decimal?     @db.Decimal(10, 2)
   lowStockThreshold Int?
   lastUpdatedBy     String?
+  updatedByUser     User?        @relation(fields: [lastUpdatedBy], references: [id], onDelete: SetNull)
   lastAdjustmentNote String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt

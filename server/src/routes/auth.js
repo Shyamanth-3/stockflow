@@ -1,12 +1,16 @@
+import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { prisma } from '../db.js'
-import { requireAuth } from '../middleware/requireAuth.js'
+import { loginAccountLimiter, loginIpLimiter, signupLimiter } from '../middleware/rateLimits.js'
+import { readToken, requireAuth } from '../middleware/requireAuth.js'
+import { isValidText } from '../validation.js'
 
 const router = Router()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sevenDays = 7 * 24 * 60 * 60 * 1000
+const dummyHash = await bcrypt.hash(randomUUID(), 10)
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
@@ -20,17 +24,25 @@ function cleanEmail(value) {
 
 function isStrongPassword(password) {
   return (
-    typeof password === 'string' &&
+    isValidText(password, 72) &&
     password.length >= 8 &&
-    password.length <= 72 &&
-    /[a-z]/i.test(password) &&
-    /\d/.test(password)
+    Buffer.byteLength(password) <= 72 &&
+    /\p{L}/u.test(password) &&
+    /\p{Nd}/u.test(password)
   )
+}
+
+function cleanOrganizationName(value) {
+  return typeof value === 'string' ? value.normalize('NFKC').trim().replace(/\s+/g, ' ') : ''
+}
+
+function toNameKey(name) {
+  return name.replace(/\p{Cf}/gu, '').trim().toLowerCase()
 }
 
 function setAuthCookie(res, user) {
   const token = jwt.sign(
-    { userId: user.id, organizationId: user.organizationId },
+    { userId: user.id, tokenVersion: user.tokenVersion },
     process.env.JWT_SECRET,
     { expiresIn: '7d' },
   )
@@ -42,13 +54,13 @@ function toPublicUser(user) {
 }
 
 // routes
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   const email = cleanEmail(req.body?.email)
   const password = req.body?.password
-  const rawName = req.body?.organizationName
-  const organizationName = typeof rawName === 'string' ? rawName.trim().replace(/\s+/g, ' ') : ''
+  const organizationName = cleanOrganizationName(req.body?.organizationName)
+  const nameKey = toNameKey(organizationName)
 
-  if (!emailPattern.test(email)) {
+  if (!isValidText(email, 254) || !emailPattern.test(email)) {
     return res.status(400).json({ error: 'Enter a valid email address' })
   }
   if (!isStrongPassword(password)) {
@@ -56,8 +68,11 @@ router.post('/signup', async (req, res) => {
       error: 'Password must be 8 to 72 characters and include a letter and a number',
     })
   }
-  if (!organizationName) {
+  if (!nameKey) {
     return res.status(400).json({ error: 'Organization name is required' })
+  }
+  if (!isValidText(organizationName, 100)) {
+    return res.status(400).json({ error: 'Organization name must be text of up to 100 characters' })
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
@@ -67,9 +82,7 @@ router.post('/signup', async (req, res) => {
       data: {
         email,
         passwordHash,
-        organization: {
-          create: { name: organizationName, nameKey: organizationName.toLowerCase() },
-        },
+        organization: { create: { name: organizationName, nameKey } },
       },
       include: { organization: true },
     })
@@ -86,7 +99,7 @@ router.post('/signup', async (req, res) => {
   }
 })
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) => {
   const email = cleanEmail(req.body?.email)
   const password = req.body?.password
 
@@ -94,13 +107,12 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' })
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { organization: true },
-  })
-  const isValid = user && (await bcrypt.compare(password, user.passwordHash))
+  const user = isValidText(email, 254)
+    ? await prisma.user.findUnique({ where: { email }, include: { organization: true } })
+    : null
+  const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? dummyHash)
 
-  if (!isValid) {
+  if (!user || !passwordMatches) {
     return res.status(401).json({ error: 'Incorrect email or password' })
   }
 
@@ -108,7 +120,16 @@ router.post('/login', async (req, res) => {
   res.json({ user: toPublicUser(user) })
 })
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const token = readToken(req)
+
+  if (token) {
+    await prisma.user.updateMany({
+      where: { id: token.userId, tokenVersion: token.tokenVersion },
+      data: { tokenVersion: { increment: 1 } },
+    })
+  }
+
   res.clearCookie('token', cookieOptions)
   res.json({ ok: true })
 })

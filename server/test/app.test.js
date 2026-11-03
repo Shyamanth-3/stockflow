@@ -1,20 +1,46 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { after, before, describe, it } from 'node:test'
+import jwt from 'jsonwebtoken'
 import { prisma } from '../src/db.js'
 import { isLowStock } from '../src/lowStock.js'
 
-const port = 3099
-const baseUrl = `http://localhost:${port}/api`
 const emailPrefix = `apptest-${Date.now()}`
 const product = { name: 'Blue Pen', sku: 'PEN-1', quantity: 10, lowStockThreshold: 5 }
+const protectedRoutes = [
+  ['GET', '/auth/me'],
+  ['GET', '/products'],
+  ['POST', '/products'],
+  ['GET', '/products/any-id'],
+  ['PUT', '/products/any-id'],
+  ['DELETE', '/products/any-id'],
+  ['POST', '/products/any-id/adjust'],
+  ['GET', '/dashboard'],
+  ['GET', '/settings'],
+  ['PUT', '/settings'],
+]
 let server
 
 // helpers
-function createClient() {
-  let cookie = ''
+function startServer(env = {}) {
+  const child = spawn(process.execPath, ['src/index.js'], {
+    env: { ...process.env, PORT: '0', ...env },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
 
-  return async function request(method, path, body) {
+  return new Promise((resolve, reject) => {
+    child.once('exit', (code) => reject(new Error(`Test server exited with code ${code}`)))
+    child.stdout.on('data', (chunk) => {
+      const match = /port (\d+)/.exec(String(chunk))
+      if (match) resolve({ child, baseUrl: `http://localhost:${match[1]}/api` })
+    })
+  })
+}
+
+function createClient(startingCookie = '', baseUrl = server.baseUrl) {
+  let cookie = startingCookie
+
+  async function request(method, path, body) {
     const res = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
@@ -27,6 +53,9 @@ function createClient() {
     if (setCookie) cookie = setCookie.split(';')[0]
     return { status: res.status, body: await res.json() }
   }
+
+  request.getCookie = () => cookie
+  return request
 }
 
 async function signUp(name) {
@@ -40,31 +69,16 @@ async function signUp(name) {
   return request
 }
 
-async function waitForServer() {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try {
-      await fetch(`${baseUrl}/health`)
-      return
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    }
-  }
-  throw new Error('Test server did not start')
-}
-
 // setup
 before(async () => {
-  server = spawn(process.execPath, ['src/index.js'], {
-    env: { ...process.env, PORT: String(port) },
-    stdio: 'inherit',
-  })
-  await waitForServer()
+  server = await startServer()
 })
 
 after(async () => {
-  server.kill()
+  server.child.removeAllListeners('exit')
+  server.child.kill()
   await prisma.organization.deleteMany({
-    where: { users: { some: { email: { startsWith: emailPrefix } } } },
+    where: { nameKey: { startsWith: emailPrefix } },
   })
   await prisma.$disconnect()
 })
@@ -78,13 +92,27 @@ describe('signup rules', () => {
     ...overrides,
   })
 
-  for (const password of ['12345678', 'abcdefgh', 'abc123', 'a1'.repeat(37)]) {
-    it(`rejects the password ${password.slice(0, 12)}`, async () => {
+  const weakPasswords = {
+    'numbers only': '12345678',
+    'letters only': 'abcdefgh',
+    'too short': 'abc123',
+    'over 72 characters': 'a1'.repeat(37),
+    'over 72 bytes': `a1${'😀'.repeat(20)}`,
+    'a NUL character': 'testpass\u0000123',
+  }
+
+  for (const [label, password] of Object.entries(weakPasswords)) {
+    it(`rejects a password with ${label}`, async () => {
       const res = await createClient()('POST', '/auth/signup', details('weak', { password }))
       assert.equal(res.status, 400)
       assert.match(res.body.error, /letter and a number/)
     })
   }
+
+  it('accepts letters and digits from other languages', async () => {
+    const res = await createClient()('POST', '/auth/signup', details('telugu', { password: 'తెలుగుభాష౧౨౩' }))
+    assert.equal(res.status, 201)
+  })
 
   it('rejects a duplicate organization name in any capitalization or spacing', async () => {
     const first = details('dupe', { organizationName: `${emailPrefix} Dupe Store` })
@@ -94,11 +122,22 @@ describe('signup rules', () => {
       `${emailPrefix} Dupe Store`,
       `${emailPrefix} DUPE store`,
       `  ${emailPrefix}   Dupe   Store  `,
+      `${emailPrefix} Dupe​ Store`,
     ]) {
       const res = await createClient()('POST', '/auth/signup', details('dupe2', { organizationName }))
       assert.equal(res.status, 409)
       assert.equal(res.body.error, 'An organization with this name already exists')
     }
+  })
+
+  it('rejects an organization name made of invisible characters', async () => {
+    const res = await createClient()('POST', '/auth/signup', details('blank', { organizationName: '​​' }))
+    assert.equal(res.status, 400)
+  })
+
+  it('rejects an organization name that is too long', async () => {
+    const res = await createClient()('POST', '/auth/signup', details('long', { organizationName: 'x'.repeat(101) }))
+    assert.equal(res.status, 400)
   })
 
   it('still reports a duplicate email as an email problem', async () => {
@@ -108,6 +147,94 @@ describe('signup rules', () => {
     const res = await createClient()('POST', '/auth/signup', details('email', { organizationName: `${emailPrefix} other` }))
     assert.equal(res.status, 409)
     assert.equal(res.body.error, 'An account with this email already exists')
+  })
+
+  it('rejects a slow-to-check email quickly', async () => {
+    const email = `a@${'.'.repeat(99000)}@`
+    const started = performance.now()
+    const res = await createClient()('POST', '/auth/signup', details('slow', { email }))
+    assert.equal(res.status, 400)
+    assert.ok(performance.now() - started < 500)
+  })
+
+  it('handles text Postgres cannot store without a server error', async () => {
+    const signup = await createClient()('POST', '/auth/signup', details('nul', { email: 'a\u0000b@example.com' }))
+    assert.equal(signup.status, 400)
+
+    const login = await createClient()('POST', '/auth/login', { email: 'a\u0000b@example.com', password: 'x' })
+    assert.equal(login.status, 401)
+  })
+})
+
+// sessions
+describe('sessions', () => {
+  it('rejects a valid token for an account that no longer exists', async () => {
+    const token = jwt.sign({ userId: 'deleted-user', tokenVersion: 0 }, process.env.JWT_SECRET)
+    const request = createClient(`token=${token}`)
+
+    for (const [method, path] of protectedRoutes) {
+      assert.equal((await request(method, path)).status, 401, `${method} ${path}`)
+    }
+  })
+
+  it('rejects a copied token after logout', async () => {
+    const request = await signUp('logout')
+    const copiedCookie = request.getCookie()
+
+    assert.equal((await createClient(copiedCookie)('GET', '/auth/me')).status, 200)
+    assert.equal((await request('POST', '/auth/logout')).status, 200)
+    assert.equal((await createClient(copiedCookie)('GET', '/auth/me')).status, 401)
+  })
+
+  it('allows logging back in after logout', async () => {
+    const request = await signUp('relogin')
+    await request('POST', '/auth/logout')
+
+    const res = await request('POST', '/auth/login', {
+      email: `${emailPrefix}-relogin@example.com`,
+      password: 'testpass123',
+    })
+    assert.equal(res.status, 200)
+    assert.equal((await request('GET', '/auth/me')).status, 200)
+  })
+})
+
+// rate limits
+describe('rate limits in production mode', () => {
+  let production
+
+  before(async () => {
+    production = await startServer({ NODE_ENV: 'production' })
+  })
+
+  after(() => {
+    production.child.removeAllListeners('exit')
+    production.child.kill()
+  })
+
+  it('blocks repeated failed logins for one account but not others', async () => {
+    const request = createClient('', production.baseUrl)
+    const attempt = (email) => request('POST', '/auth/login', { email, password: 'wrongpass123' })
+
+    for (let count = 0; count < 10; count++) {
+      assert.equal((await attempt('limited@example.com')).status, 401)
+    }
+
+    const blocked = await attempt('limited@example.com')
+    assert.equal(blocked.status, 429)
+    assert.equal(blocked.body.error, 'Too many attempts. Please try again later.')
+    assert.equal((await attempt('another@example.com')).status, 401)
+  })
+
+  it('blocks too many signups', async () => {
+    const request = createClient('', production.baseUrl)
+    const attempt = () => request('POST', '/auth/signup', { email: 'not-an-email' })
+
+    for (let count = 0; count < 30; count++) {
+      assert.equal((await attempt()).status, 400)
+    }
+
+    assert.equal((await attempt()).status, 429)
   })
 })
 
@@ -134,20 +261,7 @@ describe('isLowStock', () => {
 
 // login required
 describe('protected routes', () => {
-  const routes = [
-    ['GET', '/auth/me'],
-    ['GET', '/products'],
-    ['POST', '/products'],
-    ['GET', '/products/any-id'],
-    ['PUT', '/products/any-id'],
-    ['DELETE', '/products/any-id'],
-    ['POST', '/products/any-id/adjust'],
-    ['GET', '/dashboard'],
-    ['GET', '/settings'],
-    ['PUT', '/settings'],
-  ]
-
-  for (const [method, path] of routes) {
+  for (const [method, path] of protectedRoutes) {
     it(`${method} ${path} returns 401 without a login`, async () => {
       const res = await createClient()(method, path)
       assert.equal(res.status, 401)

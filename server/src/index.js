@@ -14,6 +14,7 @@ const app = express()
 const port = process.env.PORT || 3001
 const clientDist = path.join(import.meta.dirname, '../../client/dist')
 
+app.set('trust proxy', 1)
 app.use(express.json())
 app.use(cookieParser())
 
@@ -45,6 +46,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: status === 500 ? 'Something went wrong' : err.message })
 })
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`)
+const server = app.listen(port, (err) => {
+  if (err) throw err
+  console.log(`Server running on port ${server.address().port}`)
 })

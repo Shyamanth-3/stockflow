@@ -1,11 +1,27 @@
 import jwt from 'jsonwebtoken'
+import { prisma } from '../db.js'
 
-export function requireAuth(req, res, next) {
+export function readToken(req) {
   try {
-    const { userId, organizationId } = jwt.verify(req.cookies.token, process.env.JWT_SECRET)
-    req.user = { id: userId, organizationId }
-    next()
+    return jwt.verify(req.cookies.token, process.env.JWT_SECRET, { algorithms: ['HS256'] })
   } catch {
-    res.status(401).json({ error: 'Not logged in' })
+    return null
   }
+}
+
+export async function requireAuth(req, res, next) {
+  const token = readToken(req)
+  const user = token
+    ? await prisma.user.findUnique({
+        where: { id: token.userId },
+        select: { id: true, email: true, organizationId: true, tokenVersion: true },
+      })
+    : null
+
+  if (!user || user.tokenVersion !== token.tokenVersion) {
+    return res.status(401).json({ error: 'Not logged in' })
+  }
+
+  req.user = { id: user.id, email: user.email, organizationId: user.organizationId }
+  next()
 }
