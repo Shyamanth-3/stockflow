@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/index.js",
     "start": "node --env-file-if-exists=.env src/index.js",
-    "build": "prisma generate && prisma migrate deploy"
+    "build": "prisma generate && prisma migrate deploy",
+    "test": "node --env-file-if-exists=.env --test"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
