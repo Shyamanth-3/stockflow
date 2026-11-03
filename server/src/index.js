@@ -1,6 +1,7 @@
 import path from 'node:path'
 import express from 'express'
 import cookieParser from 'cookie-parser'
+import helmet from 'helmet'
 import authRoutes from './routes/auth.js'
 import productRoutes from './routes/products.js'
 import dashboardRoutes from './routes/dashboard.js'
@@ -13,8 +14,13 @@ if (!process.env.JWT_SECRET) {
 const app = express()
 const port = process.env.PORT || 3001
 const clientDist = path.join(import.meta.dirname, '../../client/dist')
+const clientErrors = {
+  'entity.parse.failed': 'Request body is not valid JSON',
+  'entity.too.large': 'Request is too large',
+}
 
 app.set('trust proxy', 1)
+app.use(helmet())
 app.use(express.json())
 app.use(cookieParser())
 
@@ -41,9 +47,16 @@ app.get('/{*splat}', (req, res) => {
 
 // errors
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
+
   const status = err.status || 500
-  if (status === 500) console.error(err)
-  res.status(status).json({ error: status === 500 ? 'Something went wrong' : err.message })
+  if (status >= 500) console.error(err)
+
+  const error =
+    status >= 500
+      ? 'Something went wrong'
+      : clientErrors[err.type] || 'The request could not be processed'
+  res.status(status).json({ error })
 })
 
 const server = app.listen(port, (err) => {

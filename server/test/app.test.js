@@ -238,6 +238,36 @@ describe('rate limits in production mode', () => {
   })
 })
 
+// server responses
+describe('server responses', () => {
+  const postRaw = (body) =>
+    fetch(`${server.baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+
+  it('hides parser details from invalid JSON', async () => {
+    const res = await postRaw('{bad')
+    assert.equal(res.status, 400)
+    assert.deepEqual(await res.json(), { error: 'Request body is not valid JSON' })
+  })
+
+  it('rejects a request body that is too large', async () => {
+    const res = await postRaw(JSON.stringify({ email: 'x'.repeat(200000) }))
+    assert.equal(res.status, 413)
+    assert.deepEqual(await res.json(), { error: 'Request is too large' })
+  })
+
+  it('sends security headers and hides the framework', async () => {
+    const { headers } = await fetch(`${server.baseUrl}/health`)
+    assert.equal(headers.get('x-powered-by'), null)
+    assert.equal(headers.get('x-content-type-options'), 'nosniff')
+    assert.ok(headers.get('content-security-policy'))
+    assert.ok(headers.get('strict-transport-security'))
+  })
+})
+
 // low stock rule
 describe('isLowStock', () => {
   it('is low when quantity equals the threshold', () => {
