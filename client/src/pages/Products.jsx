@@ -35,7 +35,7 @@ export default function Products() {
       })
       .catch((err) => {
         if (!isCurrent) return
-        setResults(null)
+        setResults((current) => (current?.search === query.search ? current : null))
         setError(err.message)
       })
 
@@ -61,11 +61,15 @@ export default function Products() {
   }
 
   function handleAdjusted(updated) {
-    setResults((current) => ({
-      ...current,
-      products: current.products.map((item) => (item.id === updated.id ? updated : item)),
-    }))
+    setResults(
+      (current) =>
+        current && {
+          ...current,
+          products: current.products.map((item) => (item.id === updated.id ? updated : item)),
+        },
+    )
     setAdjustingId(null)
+    setReloadCount((count) => count + 1)
   }
 
   return (
@@ -173,6 +177,7 @@ export default function Products() {
                         <AdjustStock
                           product={product}
                           onAdjusted={handleAdjusted}
+                          onOutcomeUnknown={() => setReloadCount((count) => count + 1)}
                           onCancel={() => setAdjustingId(null)}
                         />
                       </td>

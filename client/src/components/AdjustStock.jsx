@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../api.js'
 import ErrorMessage from './ErrorMessage.jsx'
 
-export default function AdjustStock({ product, onAdjusted, onCancel }) {
+export default function AdjustStock({ product, onAdjusted, onOutcomeUnknown, onCancel }) {
   const [change, setChange] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
@@ -19,8 +19,14 @@ export default function AdjustStock({ product, onAdjusted, onCancel }) {
       })
       onAdjusted(data.product)
     } catch (err) {
-      setError(err.message)
+      const outcomeUnknown = !err.status || err.status >= 500
+      setError(
+        outcomeUnknown
+          ? `${err.message} The stock may have changed, so check the quantity before trying again.`
+          : err.message,
+      )
       setSubmitting(false)
+      if (outcomeUnknown) onOutcomeUnknown()
     }
   }
 

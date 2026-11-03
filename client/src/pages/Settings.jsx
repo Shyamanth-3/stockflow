@@ -61,6 +61,7 @@ export default function Settings() {
               min="0"
               step="1"
               required
+              disabled={submitting}
               value={threshold}
               onChange={(e) => {
                 setThreshold(e.target.value)
