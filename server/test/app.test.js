@@ -340,6 +340,184 @@ describe('tenant isolation', () => {
   })
 })
 
+// product input
+describe('product input', () => {
+  let request
+
+  before(async () => {
+    request = await signUp('input')
+  })
+
+  const invalid = {
+    'a name over 200 characters': { name: 'x'.repeat(201) },
+    'a SKU over 100 characters': { sku: 'x'.repeat(101) },
+    'a description over 2000 characters': { description: 'x'.repeat(2001) },
+    'a NUL character in the name': { name: 'a\u0000b' },
+    'a lone surrogate in the name': { name: 'a\ud800b' },
+    'a quantity of 1e3': { quantity: '1e3' },
+    'a hex quantity': { quantity: '0x1F' },
+    'a threshold of 1e3': { lowStockThreshold: '1e3' },
+    'a price sent as a list': { sellingPrice: ['5'] },
+  }
+
+  for (const [label, overrides] of Object.entries(invalid)) {
+    it(`rejects ${label}`, async () => {
+      const res = await request('POST', '/products', { ...product, sku: 'BAD', ...overrides })
+      assert.equal(res.status, 400)
+    })
+  }
+
+  it('returns 404 for a product id Postgres cannot store', async () => {
+    assert.equal((await request('GET', '/products/%00')).status, 404)
+  })
+
+  it('rejects a search Postgres cannot store', async () => {
+    assert.equal((await request('GET', '/products?search=%00')).status, 400)
+  })
+})
+
+// product edits
+describe('product edits', () => {
+  let request
+  let saved
+
+  before(async () => {
+    request = await signUp('edits')
+    saved = (await request('POST', '/products', product)).body.product
+  })
+
+  it('rejects an edit based on old data and keeps the newer stock', async () => {
+    const path = `/products/${saved.id}`
+    const opened = (await request('GET', path)).body.product
+
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal((await request('POST', `${path}/adjust`, { change: -6 })).status, 200)
+
+    const res = await request('PUT', path, { ...product, name: 'Renamed', updatedAt: opened.updatedAt })
+    assert.equal(res.status, 409)
+    assert.match(res.body.error, /changed after you opened it/)
+
+    const current = (await request('GET', path)).body.product
+    assert.equal(current.quantity, 4)
+    assert.equal(current.name, product.name)
+  })
+
+  it('allows an edit based on the latest data', async () => {
+    const path = `/products/${saved.id}`
+    const opened = (await request('GET', path)).body.product
+    const res = await request('PUT', path, { ...product, quantity: 4, name: 'Renamed', updatedAt: opened.updatedAt })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.product.name, 'Renamed')
+  })
+
+  it('rejects an invalid updated time', async () => {
+    const res = await request('PUT', `/products/${saved.id}`, { ...product, updatedAt: 'not-a-date' })
+    assert.equal(res.status, 400)
+  })
+
+  it('returns a duplicate SKU error from an edit', async () => {
+    await request('POST', '/products', { ...product, sku: 'TAKEN' })
+    const res = await request('PUT', `/products/${saved.id}`, { ...product, sku: 'TAKEN' })
+    assert.equal(res.status, 409)
+    assert.match(res.body.error, /SKU/)
+  })
+
+  it('shows who last updated the product', async () => {
+    const { body } = await request('GET', `/products/${saved.id}`)
+    assert.equal(body.product.updatedByUser.email, `${emailPrefix}-edits@example.com`)
+  })
+
+  it('keeps the note when an adjustment has none, and clears it when quantity is edited', async () => {
+    const path = `/products/${saved.id}`
+    await request('POST', `${path}/adjust`, { change: -1, note: 'Damaged' })
+
+    const kept = await request('POST', `${path}/adjust`, { change: 1 })
+    assert.equal(kept.body.product.lastAdjustmentNote, 'Damaged')
+
+    const sameQuantity = await request('PUT', path, { ...product, quantity: kept.body.product.quantity, name: 'Again' })
+    assert.equal(sameQuantity.body.product.lastAdjustmentNote, 'Damaged')
+
+    const newQuantity = await request('PUT', path, { ...product, quantity: 50 })
+    assert.equal(newQuantity.body.product.lastAdjustmentNote, null)
+  })
+})
+
+// product list and dashboard
+describe('product list and dashboard', () => {
+  let request
+
+  before(async () => {
+    request = await signUp('lists')
+  })
+
+  it('pages through products without gaps or repeats', async () => {
+    const { organizationId } = (await request('POST', '/products', { ...product, sku: 'FIRST', quantity: 100 })).body.product
+    await prisma.product.createMany({
+      data: Array.from({ length: 54 }, (_, index) => ({
+        organizationId,
+        name: `Item ${index}`,
+        sku: `ITEM-${index}`,
+        quantity: 100,
+      })),
+    })
+
+    const first = (await request('GET', '/products')).body
+    const second = (await request('GET', '/products?page=2')).body
+    const ids = new Set([...first.products, ...second.products].map((item) => item.id))
+
+    assert.equal(first.total, 55)
+    assert.equal(first.pageSize, 50)
+    assert.equal(first.products.length, 50)
+    assert.equal(second.page, 2)
+    assert.equal(second.products.length, 5)
+    assert.equal(ids.size, 55)
+  })
+
+  it('treats a bad page number as the first page', async () => {
+    for (const page of ['0', '-1', 'abc', '1e3']) {
+      assert.equal((await request('GET', `/products?page=${page}`)).body.page, 1)
+    }
+  })
+
+  it('agrees with the product list about what is low stock', async () => {
+    const other = await signUp('lowstock')
+    const items = [
+      ['AT', 5, 5],
+      ['ABOVE', 6, 5],
+      ['BELOW', 1, 5],
+      ['DEFAULT-LOW', 5, ''],
+      ['DEFAULT-OK', 6, ''],
+      ['ZERO-STOCKED', 1, 0],
+      ['ZERO-EMPTY', 0, 0],
+    ]
+
+    for (const [sku, quantity, lowStockThreshold] of items) {
+      await other('POST', '/products', { name: sku, sku, quantity, lowStockThreshold })
+    }
+
+    const list = (await other('GET', '/products')).body.products
+    const dashboard = (await other('GET', '/dashboard')).body
+    const fromList = list.filter((item) => item.isLowStock).map((item) => item.sku).sort()
+    const fromDashboard = dashboard.lowStockItems.map((item) => item.sku).sort()
+
+    assert.deepEqual(fromDashboard, fromList)
+    assert.deepEqual(fromDashboard, ['AT', 'BELOW', 'DEFAULT-LOW', 'ZERO-EMPTY'])
+    assert.equal(dashboard.lowStockCount, 4)
+    assert.equal(dashboard.totalProducts, 7)
+    assert.equal(dashboard.totalUnits, 24)
+  })
+
+  it('adds up units beyond the database integer limit', async () => {
+    const other = await signUp('bigtotal')
+    await other('POST', '/products', { name: 'A', sku: 'A', quantity: 2147483647 })
+    await other('POST', '/products', { name: 'B', sku: 'B', quantity: 2147483647 })
+
+    const { status, body } = await other('GET', '/dashboard')
+    assert.equal(status, 200)
+    assert.equal(body.totalUnits, 4294967294)
+  })
+})
+
 // stock adjust
 describe('stock adjust', () => {
   it('never goes below 0 when adjustments arrive together', async () => {

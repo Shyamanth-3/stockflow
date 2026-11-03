@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { parseWholeNumber } from '../validation.js'
 
 const router = Router()
-const maxInt = 2147483647
 
 router.use(requireAuth)
 
@@ -17,9 +17,9 @@ router.get('/', async (req, res) => {
 })
 
 router.put('/', async (req, res) => {
-  const value = req.body?.defaultLowStockThreshold
+  const value = parseWholeNumber(req.body?.defaultLowStockThreshold)
 
-  if (!Number.isInteger(value) || value < 0 || value > maxInt) {
+  if (value === null) {
     return res.status(400).json({ error: 'Default threshold must be a whole number of 0 or more' })
   }
 
