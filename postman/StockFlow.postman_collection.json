@@ -27,6 +27,14 @@
     {
       "key": "emailB",
       "value": ""
+    },
+    {
+      "key": "emailC",
+      "value": ""
+    },
+    {
+      "key": "emailD",
+      "value": ""
     }
   ],
   "item": [
@@ -2352,6 +2360,547 @@
         },
         {
           "name": "Final logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Dashboard without login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Signup as Org C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('emailC', 'postman-c-' + Date.now() + '@example.com');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailC}}\",\n  \"password\": \"{{password}}\",\n  \"organizationName\": \"Org C\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Dashboard with no products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const summary = pm.response.json();",
+                  "pm.test('Totals are zero', () => { pm.expect(summary.totalProducts).to.eql(0); pm.expect(summary.totalUnits).to.eql(0); pm.expect(summary.lowStockItems).to.eql([]); });",
+                  "pm.test('Default threshold is 5', () => pm.expect(summary.defaultLowStockThreshold).to.eql(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create At threshold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"At threshold\",\n  \"sku\": \"AT-5\",\n  \"quantity\": 5,\n  \"lowStockThreshold\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Above threshold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Above threshold\",\n  \"sku\": \"ABOVE-6\",\n  \"quantity\": 6,\n  \"lowStockThreshold\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Below threshold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Below threshold\",\n  \"sku\": \"BELOW-1\",\n  \"quantity\": 1,\n  \"lowStockThreshold\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Default low",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Default low\",\n  \"sku\": \"DEF-5\",\n  \"quantity\": 5,\n  \"lowStockThreshold\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Default fine",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Default fine\",\n  \"sku\": \"DEF-6\",\n  \"quantity\": 6,\n  \"lowStockThreshold\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Zero threshold with stock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Zero threshold with stock\",\n  \"sku\": \"ZERO-1\",\n  \"quantity\": 1,\n  \"lowStockThreshold\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Zero threshold empty",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Zero threshold empty\",\n  \"sku\": \"ZERO-0\",\n  \"quantity\": 0,\n  \"lowStockThreshold\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Dashboard totals and low stock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const summary = pm.response.json();",
+                  "const skus = summary.lowStockItems.map((i) => i.sku).sort();",
+                  "pm.test('Total products is 7', () => pm.expect(summary.totalProducts).to.eql(7));",
+                  "pm.test('Total units is 24', () => pm.expect(summary.totalUnits).to.eql(24));",
+                  "pm.test('Only low stock products are listed', () => pm.expect(skus).to.eql(['AT-5', 'BELOW-1', 'DEF-5', 'ZERO-0']));",
+                  "pm.test('Lowest quantity comes first', () => pm.expect(summary.lowStockItems[0].sku).to.eql('ZERO-0'));",
+                  "pm.test('Item has the required fields', () => { const row = summary.lowStockItems.find((i) => i.sku === 'AT-5'); pm.expect(row.name).to.eql('At threshold'); pm.expect(row.quantity).to.eql(5); pm.expect(row.lowStockThreshold).to.eql(5); });",
+                  "pm.test('Empty threshold stays null', () => pm.expect(summary.lowStockItems.find((i) => i.sku === 'DEF-5').lowStockThreshold).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log out of Org C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Signup as Org D",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('emailD', 'postman-d-' + Date.now() + '@example.com');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailD}}\",\n  \"password\": \"{{password}}\",\n  \"organizationName\": \"Org D\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Org D sees none of Org C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const summary = pm.response.json();",
+                  "pm.test('Org D totals are zero', () => { pm.expect(summary.totalProducts).to.eql(0); pm.expect(summary.totalUnits).to.eql(0); pm.expect(summary.lowStockItems).to.eql([]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dashboard final logout",
           "event": [
             {
               "listen": "test",
