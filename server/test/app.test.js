@@ -34,7 +34,7 @@ async function signUp(name) {
   const res = await request('POST', '/auth/signup', {
     email: `${emailPrefix}-${name}@example.com`,
     password: 'testpass123',
-    organizationName: `Test ${name}`,
+    organizationName: `${emailPrefix} ${name}`,
   })
   assert.equal(res.status, 201)
   return request
@@ -67,6 +67,48 @@ after(async () => {
     where: { users: { some: { email: { startsWith: emailPrefix } } } },
   })
   await prisma.$disconnect()
+})
+
+// signup rules
+describe('signup rules', () => {
+  const details = (suffix, overrides) => ({
+    email: `${emailPrefix}-${suffix}@example.com`,
+    password: 'testpass123',
+    organizationName: `${emailPrefix} ${suffix}`,
+    ...overrides,
+  })
+
+  for (const password of ['12345678', 'abcdefgh', 'abc123', 'a1'.repeat(37)]) {
+    it(`rejects the password ${password.slice(0, 12)}`, async () => {
+      const res = await createClient()('POST', '/auth/signup', details('weak', { password }))
+      assert.equal(res.status, 400)
+      assert.match(res.body.error, /letter and a number/)
+    })
+  }
+
+  it('rejects a duplicate organization name in any capitalization or spacing', async () => {
+    const first = details('dupe', { organizationName: `${emailPrefix} Dupe Store` })
+    assert.equal((await createClient()('POST', '/auth/signup', first)).status, 201)
+
+    for (const organizationName of [
+      `${emailPrefix} Dupe Store`,
+      `${emailPrefix} DUPE store`,
+      `  ${emailPrefix}   Dupe   Store  `,
+    ]) {
+      const res = await createClient()('POST', '/auth/signup', details('dupe2', { organizationName }))
+      assert.equal(res.status, 409)
+      assert.equal(res.body.error, 'An organization with this name already exists')
+    }
+  })
+
+  it('still reports a duplicate email as an email problem', async () => {
+    const first = details('email')
+    assert.equal((await createClient()('POST', '/auth/signup', first)).status, 201)
+
+    const res = await createClient()('POST', '/auth/signup', details('email', { organizationName: `${emailPrefix} other` }))
+    assert.equal(res.status, 409)
+    assert.equal(res.body.error, 'An account with this email already exists')
+  })
 })
 
 // low stock rule

@@ -18,6 +18,16 @@ function cleanEmail(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
+function isStrongPassword(password) {
+  return (
+    typeof password === 'string' &&
+    password.length >= 8 &&
+    password.length <= 72 &&
+    /[a-z]/i.test(password) &&
+    /\d/.test(password)
+  )
+}
+
 function setAuthCookie(res, user) {
   const token = jwt.sign(
     { userId: user.id, organizationId: user.organizationId },
@@ -36,13 +46,15 @@ router.post('/signup', async (req, res) => {
   const email = cleanEmail(req.body?.email)
   const password = req.body?.password
   const rawName = req.body?.organizationName
-  const organizationName = typeof rawName === 'string' ? rawName.trim() : ''
+  const organizationName = typeof rawName === 'string' ? rawName.trim().replace(/\s+/g, ' ') : ''
 
   if (!emailPattern.test(email)) {
     return res.status(400).json({ error: 'Enter a valid email address' })
   }
-  if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
-    return res.status(400).json({ error: 'Password must be 8 to 72 characters' })
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({
+      error: 'Password must be 8 to 72 characters and include a letter and a number',
+    })
   }
   if (!organizationName) {
     return res.status(400).json({ error: 'Organization name is required' })
@@ -55,7 +67,9 @@ router.post('/signup', async (req, res) => {
       data: {
         email,
         passwordHash,
-        organization: { create: { name: organizationName } },
+        organization: {
+          create: { name: organizationName, nameKey: organizationName.toLowerCase() },
+        },
       },
       include: { organization: true },
     })
@@ -63,7 +77,10 @@ router.post('/signup', async (req, res) => {
     res.status(201).json({ user: toPublicUser(user) })
   } catch (err) {
     if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'An account with this email already exists' })
+      const error = err.meta?.target?.includes('nameKey')
+        ? 'An organization with this name already exists'
+        : 'An account with this email already exists'
+      return res.status(409).json({ error })
     }
     throw err
   }
